@@ -254,7 +254,7 @@ df_continent<-df_continent %>%
       #using log infection rates reduces variation but residuals are NOT normally distributed
 
 ###GLM additive
-glm_additive<- lm(log_smoothed_cases_per_million ~ smoothed_stringency_index +
+glm_additive<- lm(smoothed_cases_per_million ~ smoothed_stringency_index +
                     smoothed_diveristy +
                     smoothed_voc_prop +
                     continent, 
