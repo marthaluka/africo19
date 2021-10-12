@@ -156,11 +156,11 @@ summ_lineages<- mutationData %>%
 topLineages<-unique(summ_lineages$lineage)
 
 
-#create a custom pallete to fix lineage colours across continents  
-colour_palette<-c("azure1", "darksalmon", "dodgerblue", "gold1", "hotpink", "ivory4", 
-                  "lavenderblush", "lightpink4", "orange1", "palegoldenrod", "plum4",
-                  "purple3", "turquoise")
-
+#create a custom pallete to fix lineage colours across continents  #############
+my_colour_palette<-c("#8DD3C7","#FFFFB3","#BEBADA","#FB8072","#80B1D3","firebrick1",
+                  "#B3DE69","#FCCDE5","deeppink3","#BC80BD","#CCEBC5","darkorange", 
+                  "goldenrod1",
+                  "cyan", "gray30", "gray95", "peachpuff", "royalblue", "magenta")
 
 
 df_topLineages<- mutationData %>%
@@ -186,7 +186,7 @@ highestCasesInADay<-max(continentData1$smoothed_cases_per_million)
 plot2<-ggplot() + 
   geom_bar(data=df_biweeklyTotal, aes(x = date14, y=topLineage_prop,fill=lineage), #fill=forcats::fct_rev(topLineages) #to reverse order
            position = "stack", stat="identity", width=14,color='black')+
-  geom_line(data=continentData1, aes(x=date,y= yaxis,color='data'), size=1,color="black") +
+  geom_line(data=continentData1, aes(x=date,y= smoothed_cases_per_million/highestCasesInADay,color='data'), size=1,color="black") +
   theme_classic() + theme_bw() +
   ylab('Proportion') +
   scale_y_continuous(breaks = c(0,0.25, 0.50, 0.75, 1),
@@ -202,8 +202,9 @@ plot2<-ggplot() +
         plot.title = element_text(size = 15, face = "bold"),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
-        strip.background = element_blank())+ 
-  scale_fill_brewer(palette = "Set3")+
+        strip.background = element_blank(),
+        strip.text = element_text(size = 15))+ 
+  scale_fill_manual(values = my_colour_palette, name ="Lineage")+
   facet_wrap(vars(continent))+
   guides(fill=guide_legend(title="Lineage"))
 
