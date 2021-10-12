@@ -73,7 +73,7 @@ continentData1<-continentData1%>%
 head(continentData1)
 
 #visualize data to check if all is ok
-ggplot(data=continentData1)+
+plot1<-ggplot(data=continentData1)+
   #geom_line(aes(x=date, y=new_cases_per_million, colour = "Cases per 1M"))+
   geom_line(aes(x=date, y=stringency_index, colour = "Stringency Index"))+
   geom_line(aes(x=date, y=smoothed_cases_per_million, colour = "Smoothed Cases per 1M"))+
@@ -183,7 +183,7 @@ highestCasesInADay<-max(continentData1$smoothed_cases_per_million)
 
 # Plot ##########
 #pdf(paste0("../figures/", selection, "3.pdf"), width=8, height = 4.5)
-ggplot() + 
+plot2<-ggplot() + 
   geom_bar(data=df_biweeklyTotal, aes(x = date14, y=topLineage_prop,fill=lineage), #fill=forcats::fct_rev(topLineages) #to reverse order
            position = "stack", stat="identity", width=14,color='black')+
   geom_line(data=continentData1, aes(x=date,y= yaxis,color='data'), size=1,color="black") +
@@ -207,6 +207,7 @@ ggplot() +
   facet_wrap(vars(continent))+
   guides(fill=guide_legend(title="Lineage"))
 
+plot2
 #dev.off()
 
 #Arrange plots in set##########
