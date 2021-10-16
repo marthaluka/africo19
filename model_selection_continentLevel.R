@@ -23,7 +23,7 @@ owidData0<- read.csv(
 head(owidData0)
 
 length(owidData0$new_tests_per_thousand)
-sum(is.na(owidData0$new_cases_per_million))  #drop number of tests per capita  due to missing data (>50% entries are NA)
+sum(is.na(owidData0$new_tests_per_thousand))  #drop number of tests per capita  due to missing data (>50% entries are NA)
 
 #date formats
 owidData0$date<-as.Date(owidData0$date)
@@ -33,7 +33,7 @@ owidData0$date<-as.Date(owidData0$date)
 
 owidData1 <- owidData0 %>%
   mutate(across(where(is.character),str_trim)) %>% 
-  filter(new_cases_per_million>=0) %>%    #drop any negative values 
+  dplyr::filter(new_cases_per_million>=0) %>%    #drop any negative values 
   dplyr::group_by(location) %>% 
   dplyr::arrange(date) %>% 
   dplyr::mutate(smoothed_cases_per_million = zoo::rollmean(new_cases_per_million, k = 14, fill = 0)) %>%  
@@ -169,13 +169,16 @@ lineage_diversity_df<-cont_mutationData1 %>%
   left_join (seq_count, 
              by= c("continent", "date")) %>%
   mutate(
-    diversity_score=distinct_lineages_per_continent_per_day/n,  #diversity taking into account total number of sequences
+    diversity_score=distinct_lineages_per_continent_per_day/n,  #diversity taking into account total number of sequences. 
+    #this doesn't work too well at the beginning (pre-May 2020) when we have very few sequences. Diversity appears high while instaed the sequences were few
+    #we stick with distinct_lineages_per_continent_per_day
   )  %>%
-  dplyr::select(continent, date, diversity_score) %>%
+  dplyr::select(continent, date, diversity_score, distinct_lineages_per_continent_per_day) %>%
   distinct() %>%    #drop duplicated rows
   group_by(continent, date) %>%
   mutate(
-    smoothed_diveristy = zoo::rollmean(diversity_score, k = 14, fill = 0)  #biweekly rolling mean - for smoothing,
+    smoothed_diveristy = zoo::rollmean(diversity_score, k = 14, fill = 0),  #biweekly rolling mean - for smoothing,
+    smoothed_distinct_lineages = zoo::rollmean(distinct_lineages_per_continent_per_day, k = 14, fill = 0)
   )
   
   
@@ -193,7 +196,7 @@ vocs<-c("B.1.1.7", "P.1", "B.1.351", "B.1.617.2")
 dplyr::count(mutationData, continent, date, lineage) -> continent_daily_lineage_summary
 # #count vocs per continent per day
 vocs_count <- continent_daily_lineage_summary %>% 
-  filter(lineage %in% vocs) %>% 
+  dplyr::filter(lineage %in% vocs) %>% 
   group_by(continent, date) %>% 
   summarise(
     voc_total = sum(n, na.rm = T)
@@ -240,7 +243,8 @@ df_continent<-continentData2 %>%
   left_join(comprehensive_mutation_df, by=c("continent", "date"))
 
 df_continent<-mutate_at(df_continent, c("smoothed_cases_per_million", "smoothed_vaccines_per_hundred", 
-                                        "smoothed_stringency_index", "smoothed_diveristy", "smoothed_voc_prop"),
+                                        "smoothed_stringency_index", "smoothed_diveristy", "smoothed_voc_prop",
+                                        "smoothed_distinct_lineages"),
                         ~replace(., is.na(.), 0))
                         
                 
@@ -259,19 +263,19 @@ head(df_continent)
 
 ###GLM additive
 glm_additive1<- lm(smoothed_cases_per_million ~ smoothed_stringency_index +
-                    smoothed_diveristy +
-                    smoothed_voc_prop +
+                     smoothed_voc_prop +
+                     smoothed_distinct_lineages *
                     continent, 
                   data = df_continent)
 summary(glm_additive1)
-hist(residuals(glm_additive1))
-par(mfrow=c(2,2))
-visreg(glm_additive1)
+#hist(residuals(glm_additive1))
+# par(mfrow=c(2,2))
+# visreg(glm_additive1)
 
 glm_additive2<- lm(smoothed_cases_per_million ~ smoothed_stringency_index +
-                     smoothed_diveristy +
-                     smoothed_voc_prop +
                      smoothed_vaccines_per_hundred +
+                     smoothed_voc_prop +
+                     smoothed_distinct_lineages *
                      continent, 
                    data = df_continent)
 summary(glm_additive2)
@@ -289,6 +293,7 @@ head(df_continent)
 
 #smooth the predictions above
 df_continent2 <- df_continent %>%
+  group_by(continent) %>%
   dplyr::arrange(date) %>% 
   dplyr::mutate(all_smoothed = zoo::rollmean(all, k = 14, fill = NA)) %>%   #biweekly rolling mean - for smoothing
   dplyr::mutate(allNoVaccine_smoothed = zoo::rollmean(allNoVaccine, k = 14, fill = NA)) 
@@ -297,7 +302,7 @@ df_continent2 <- df_continent %>%
 #Plot 1#################################
 #select per continent to plot
 
-selected<-"South America"
+#selected<-"South America"
 comprehensive_df3<-df_continent2 %>%
   filter(continent==selected)
 
@@ -315,7 +320,7 @@ plot1<-ggplot(data=df_continent2)+
         axis.title.y = element_text(color="black", size=11),
         axis.text.y = element_text(color="black", size=10),
         legend.position = "top",
-        panel.grid.major = element_blank(),
+        #panel.grid.major = element_blank(),
         panel.grid.minor = element_blank())+ 
   ylab("Cases per million")+
   scale_fill_brewer(palette = "Set3")+
@@ -325,29 +330,6 @@ plot1<-ggplot(data=df_continent2)+
 #dev.off()
 
 plot1
-view(df_continent2)
-
-ggplot(data=cont_mutationData1)+
-  geom_line(aes(x=date, y=distinct_lineages_per_continent_per_day, color="diversity"))+
-  #geom_line(aes(x=date, y=smoothed_voc_prop, color="smoothed_voc_prop"))+
-  theme_bw()+
-  theme(legend.position = "right") +
-  scale_x_date(date_labels = "%b\n%Y",date_breaks = "3 months", limits = as.Date(c('2019-12-01','2021-08-01')))+
-  #theme(axis.title.x = element_text(color="black", size=15, face="bold"))+
-  theme(axis.text.x = element_text(color="black", size=9.5),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(color="black", size=11),
-        axis.text.y = element_text(color="black", size=10),
-        legend.position = "top",
-        panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())+ 
-  ylab("Cases per million")+
-  scale_fill_brewer(palette = "Set3")+
-  #ggtitle(selected)+
-  guides(color=guide_legend(title=NULL))+
-  facet_wrap(vars(continent))
-
-
 
 
 

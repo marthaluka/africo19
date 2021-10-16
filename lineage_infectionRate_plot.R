@@ -29,7 +29,7 @@ owidData0$date<-as.Date(owidData0$date)
 
 owidData1 <- owidData0 %>%
   mutate(across(where(is.character),str_trim)) %>% 
-  filter(new_cases_per_million>=0) %>%    #drop any negative/zero values ie treat zero as missing data
+  dplyr::filter(new_cases_per_million >= 0) %>%    #drop any negative/zero values ie treat zero as missing data
   dplyr::group_by(location) %>% 
   dplyr::arrange(date) %>% 
   dplyr::mutate(smoothed_cases_per_million = zoo::rollmean(new_cases_per_million, k = 14, fill = 0)) %>%  
@@ -59,7 +59,8 @@ contStringency<-countryLevelData_owid %>%
   dplyr::select(continent, date, stringency_index)%>%
   mutate_at("stringency_index", ~replace(., is.na(.), 0)) %>%  #replace NA with zero
   group_by(continent, date) %>% 
-  summarise_each(funs(mean))%>%  #continental average of stringency index
+  #summarise_each(funs(mean)) %>%  #continental average of stringency index. #using next command as this is deprecated
+  summarise_each(list(stringency_index = mean)) %>%   #continental average of stringency index
   subset(continent %in% continentList)  # drop unknown/misspelt contient names
 
 continentData1<-merge(continentData0, contStringency, by=c("continent", "date"), all.x = T)
@@ -73,7 +74,7 @@ continentData1<-continentData1%>%
 head(continentData1)
 
 #visualize data to check if all is ok
-plot1<-ggplot(data=continentData1)+
+ggplot(data=continentData1)+
   #geom_line(aes(x=date, y=new_cases_per_million, colour = "Cases per 1M"))+
   geom_line(aes(x=date, y=stringency_index, colour = "Stringency Index"))+
   geom_line(aes(x=date, y=smoothed_cases_per_million, colour = "Smoothed Cases per 1M"))+
@@ -157,20 +158,20 @@ topLineages<-unique(summ_lineages$lineage)
 
 
 #create a custom pallete to fix lineage colours across continents  #############
-my_colour_palette<-c("#8DD3C7","#FFFFB3","#BEBADA","#FB8072","#80B1D3","firebrick1",
+my_colour_palette<-c("#8DD3C7","#FFFFB3","#BEBADA","#FB8072","#80B1D3",
                   "#B3DE69","#FCCDE5","deeppink3","#BC80BD","#CCEBC5","darkorange", 
-                  "goldenrod1",
-                  "cyan", "gray30", "gray95", "peachpuff", "royalblue", "magenta")
+                  "goldenrod1","royalblue",
+                  "cyan", "gray30", "firebrick1","gray95", "peachpuff",  "magenta")
 
 
 df_topLineages<- mutationData %>%
-  group_by(continent, lineage, date14)  %>%
+  dplyr::group_by(continent, lineage, date14)  %>%
   dplyr::summarise(topTotal=n()) %>%
   subset(lineage %in% topLineages)  #filter based on top
   
 
 df_biweeklyTotal<-mutationData %>%
-  group_by(continent, date14)  %>%
+  dplyr::group_by(continent, date14)  %>%
   dplyr::summarise(allSeqs=n()) %>%
   left_join(df_topLineages,
             by=c("date14", "continent"))
@@ -205,7 +206,7 @@ plot2<-ggplot() +
         strip.background = element_blank(),
         strip.text = element_text(size = 15))+ 
   scale_fill_manual(values = my_colour_palette, name ="Lineage")+
-  facet_wrap(vars(continent))+
+  facet_wrap(vars(continent), ncol = 2)+
   guides(fill=guide_legend(title="Lineage"))
 
 plot2
