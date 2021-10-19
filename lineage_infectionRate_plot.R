@@ -128,16 +128,31 @@ mutationData<- mutationData %>%
   dplyr::mutate_at(
     c("continent", "country"), renameFunction
   ) %>%
-  mutate(across(where(is.character),str_trim)) 
+  mutate(across(where(is.character),str_trim)) %>%
+  dplyr::filter(continent != is.na(.))
 
         #drop countries with less than 100 sequences
-        table1<-table(mutationData$country)
-        mutationData<- mutationData %>%
-          subset(.,country %in% names(table1[table1>100])) #drop
+        # table1<-table(mutationData$country)
+        # mutationData<- mutationData %>%
+        #   subset(.,country %in% names(table1[table1>100])) #drop
 
+#clean up country names and the ever increasing in complexity lineage naming system
 mutationData$country[startsWith(mutationData$country, "Uk-")] <- "United Kingdom"
+mutationData$lineage[startsWith(mutationData$lineage, "AY.")] <- "Delta"
+mutationData$lineage[startsWith(mutationData$lineage, "Q.")] <- "Alpha"
 
-table(mutationData$country)
+dict<-c("B.1.1.7" ="Alpha",
+        "B.1.351" = "Beta",
+        "P.1" = "Gamma",
+        "B.1.617.2" = "Delta")
+
+mutationData$lineage2 <- as.character(dict[mutationData$lineage])
+
+mutationData<-mutationData %>%
+  mutate(lineage = coalesce(lineage2,lineage)) %>%
+  dplyr::select(-c(lineage2))
+
+table(mutationData$lineage)
 
 
 ###Plot topLineage dynamics and infection rates################################################
@@ -158,11 +173,13 @@ topLineages<-unique(summ_lineages$lineage)
 
 
 #create a custom pallete to fix lineage colours across continents  #############
-my_colour_palette<-c("#8DD3C7","#FFFFB3","#BEBADA","#FB8072","#80B1D3",
+my_colour_palette<-c("#8DD3C7","#FFFFB3","royalblue","#FB8072","#80B1D3",
                   "#B3DE69","#FCCDE5","deeppink3","#BC80BD","#CCEBC5","darkorange", 
-                  "goldenrod1","royalblue",
-                  "cyan", "gray30", "firebrick1","gray95", "peachpuff",  "magenta")
+                  "goldenrod1","#BEBADA",
+                  "peachpuff","gray40", "cyan", "deepskyblue3", "tan4","gray95", "firebrick1")
 
+lineage_levels<-c("Alpha", "Beta", "Gamma", "Delta", "A.2.2", "B.1", "B.1.1", "B.1.1.214", "B.1.1.284",
+          "B.1.177", "B.1.2", "B.1.351.2", "B.1.429", "C.37", "D.2", "P.2", "R.1")
 
 df_topLineages<- mutationData %>%
   dplyr::group_by(continent, lineage, date14)  %>%
@@ -171,12 +188,15 @@ df_topLineages<- mutationData %>%
   
 
 df_biweeklyTotal<-mutationData %>%
+  drop_na(.)  %>%
   dplyr::group_by(continent, date14)  %>%
   dplyr::summarise(allSeqs=n()) %>%
   left_join(df_topLineages,
             by=c("date14", "continent"))
 
 df_biweeklyTotal$topLineage_prop <- df_biweeklyTotal$topTotal/df_biweeklyTotal$allSeqs  
+
+df_biweeklyTotal$lineage<-factor(df_biweeklyTotal$lineage, levels = lineage_levels)
 
 head(continentData1)
 
@@ -196,15 +216,15 @@ plot2<-ggplot() +
   theme(legend.position = "right") +
   scale_x_date(date_labels = "%b \n %Y",date_breaks = "3 months", limits = as.Date(c('2019-12-01','2021-10-01')))+
   #theme(axis.title.x = element_text(color="black", size=15, face="bold"))+
-  theme(axis.text.x = element_text(angle=0, color="black", size=13),
+  theme(axis.text.x = element_text(angle=0, color="black", size=7),
         axis.title.x = element_blank(),
-        axis.title.y = element_text(color="black", size=15, face="bold"),
-        axis.text.y = element_text(color="black", size=14),
-        plot.title = element_text(size = 15, face = "bold"),
+        axis.title.y = element_text(color="black", size=10, face="bold"),
+        axis.text.y = element_text(color="black", size=7),
+        plot.title = element_text(size = 10, face = "bold"),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         strip.background = element_blank(),
-        strip.text = element_text(size = 15))+ 
+        strip.text = element_text(size = 10))+ 
   scale_fill_manual(values = my_colour_palette, name ="Lineage")+
   facet_wrap(vars(continent), ncol = 2)+
   guides(fill=guide_legend(title="Lineage"))
