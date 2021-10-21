@@ -7,7 +7,7 @@ rm(list = ls())
 
 ## packages
 require("pacman")
-pacman::p_load(data.table, tidyverse, zoo, RColorBrewer, directlabels,corrplot,
+pacman::p_load(data.table, tidyverse, zoo, RColorBrewer, directlabels,corrplot, broom,
                stringr, spData, ggrepel, corrr, patchwork, cowplot, egg, here, visreg,
                glmmTMB, lme4, DHARMa, performance, MASS, mgcv) 
 
@@ -81,7 +81,7 @@ continentData2 <- continentData1 %>%
 
 #visualize data to check if all is ok
 ggplot(data=continentData2)+
-  geom_line(aes(x=date, y=new_tests_per_thousand, colour = "Tests per 1M")) +
+  #geom_line(aes(x=date, y=new_tests_per_thousand, colour = "Tests per 1M")) +
   geom_line(aes(x=date, y=smoothed_stringency_index, colour = "Smoothed stringency Index"))+
   geom_line(aes(x=date, y=smoothed_cases_per_million, colour = "Smoothed Cases per 1M"))+
   #scale_x_date(date_labels = "%b-%y",date_breaks = "1 month", limits = as.Date(c('2019-12-01','2021-10-01')))+
@@ -142,7 +142,23 @@ mutationData<- mutationData %>%
 # mutationData<- mutationData %>% 
 #   subset(.,country %in% names(table1[table1>100])) #drop
 
+#clean up country names and the ever increasing in complexity lineage naming system
 mutationData$country[startsWith(mutationData$country, "Uk-")] <- "United Kingdom"
+mutationData$lineage[startsWith(mutationData$lineage, "AY.")] <- "Delta"
+mutationData$lineage[startsWith(mutationData$lineage, "Q.")] <- "Alpha"
+
+dict<-c("B.1.1.7" ="Alpha",
+        "B.1.351" = "Beta",
+        "P.1" = "Gamma",
+        "B.1.617.2" = "Delta")
+
+mutationData$lineage2 <- as.character(dict[mutationData$lineage])
+
+mutationData<-mutationData %>%
+  mutate(lineage = coalesce(lineage2,lineage)) %>%
+  dplyr::select(-c(lineage2))
+
+table(mutationData$lineage)
 
 head(mutationData)
 
@@ -171,17 +187,17 @@ lineage_diversity_df<-cont_mutationData1 %>%
   mutate(
     diversity_score=distinct_lineages_per_continent_per_day/n,  #diversity taking into account total number of sequences. 
     #this doesn't work too well at the beginning (pre-May 2020) when we have very few sequences. Diversity appears high while instaed the sequences were few
-    #we stick with distinct_lineages_per_continent_per_day
+    #should we stick with distinct_lineages_per_continent_per_day?
+    #New plan (19-10-2021), we drop data before 1st April 2020 before the linear regression
   )  %>%
   dplyr::select(continent, date, diversity_score, distinct_lineages_per_continent_per_day) %>%
   distinct() %>%    #drop duplicated rows
-  group_by(continent, date) %>%
+  group_by(continent) %>%
+  dplyr::arrange(date) %>%
   mutate(
     smoothed_diveristy = zoo::rollmean(diversity_score, k = 14, fill = 0),  #biweekly rolling mean - for smoothing,
     smoothed_distinct_lineages = zoo::rollmean(distinct_lineages_per_continent_per_day, k = 14, fill = 0)
-  )
-  
-  
+  ) 
 
 pacman::p_unload(plyr) #will conflict with dplyr downstream
 
@@ -190,7 +206,7 @@ pacman::p_unload(plyr) #will conflict with dplyr downstream
 ##2. VOC proportions per time period########
 
 #define VOCs 
-vocs<-c("B.1.1.7", "P.1", "B.1.351", "B.1.617.2")
+vocs<-c("Alpha", "Beta", "Gamma", "Delta")
 
 ### Summary of lineages per continent per day
 dplyr::count(mutationData, continent, date, lineage) -> continent_daily_lineage_summary
@@ -222,7 +238,7 @@ voc_proportions_continent <- data_set_cont %>%
   dplyr::group_by(continent) %>% 
   dplyr::arrange(date) %>%
   mutate(
-    smoothed_voc_prop = zoo::rollmean(voc_prop_cont, k = 14, fill = NA),  #biweekly rolling mean - for smoothing
+    smoothed_voc_prop = zoo::rollmean(voc_prop_cont, k = 14, fill = 0),  #biweekly rolling mean - for smoothing
   ) 
 
 
@@ -250,95 +266,114 @@ df_continent<-mutate_at(df_continent, c("smoothed_cases_per_million", "smoothed_
                 
 head(df_continent)
 
-# Model 1 
+regressionData<- df_continent %>%
+  dplyr::group_by(continent) %>% 
+  dplyr::arrange(date) %>%
+  mutate(
+    smoothed_diversity = zoo::rollmean(smoothed_diveristy, k = 7, fill = 0),  #we repeat because data is still noisy
+  ) %>%
+  dplyr::select(continent, date, smoothed_cases_per_million, smoothed_voc_prop, smoothed_diversity, smoothed_stringency_index,
+                smoothed_vaccines_per_hundred, smoothed_distinct_lineages)%>%
+  dplyr::filter(date >"2020-04-01" & date <"2021-09-01") #data seems a bit unstable before this date
+
+  
+
+ggplot(data= regressionData)+
+  geom_line(aes(x=date, y=smoothed_voc_prop))+
+  geom_line(aes(x=date, y=smoothed_diversity))+
+  facet_wrap(vars(continent))+
+  theme_bw()
+
+
+#all looks good! Time to fit a linear model :-)
+
+#correlation test first 
+
+regressionData %>% 
+  nest(data = -continent) %>% 
+  mutate(
+    voc = map(data, ~ cor.test(.x$smoothed_cases_per_million, .x$smoothed_voc_prop)), # S3 list-col
+    tidied = map(voc, tidy)
+  ) %>% 
+  unnest(tidied)  #repeat for other variables. Actually just do this globally once and visualize
+
+
+
+# Time to fit a linear model :-)
+
 # Multiple Linear Regression
     #lm([target variable] ~ [predictor variables], data = [data source])
 
-# df_continent$log_smoothed_cases_per_million<-log(df_continent$smoothed_cases_per_million)
-# df_continent$log_smoothed_cases_per_million[which(is.infinite(df_continent$log_smoothed_cases_per_million))] <- 0. #replace inf with zero
-# df_continent<-df_continent %>%
-#   filter_all(all_vars(!is.infinite(.))). #drop infinite values
+# Use the plyr package to run regressions per continent instead of filtering each time
+library(plyr)
+#defn function for linear model
+lm_with_plyr<-function(df){
+  lm(smoothed_cases_per_million ~ smoothed_stringency_index +
+       smoothed_vaccines_per_hundred +
+       smoothed_voc_prop +
+       smoothed_diversity,
+     data = df)
+}
+#divide df into smaller dfs (creates a list of dfs) based on continent and run lm for each of the dfs
+models<-dlply(regressionData, "continent", lm_with_plyr)
+# Apply coef to each model and return a data frame
+ldply(models, coef)
+# Print the summary of each model
+l_ply(models, summary, .print = TRUE)
+# R Squared
+laply(models, function(mod) summary(mod)$r.squared)
 
-      #using log infection rates reduces variation but residuals are NOT normally distributed
+# Find fitted values
+summary(models$Africa)
 
-###GLM additive
-glm_additive1<- lm(smoothed_cases_per_million ~ smoothed_stringency_index +
-                     smoothed_voc_prop +
-                     smoothed_distinct_lineages *
-                    continent, 
-                  data = df_continent)
-summary(glm_additive1)
-#hist(residuals(glm_additive1))
-# par(mfrow=c(2,2))
-# visreg(glm_additive1)
+african_df<-regressionData %>%
+  dplyr::filter(continent=="Africa") %>%
+  mutate(fitted_cases = fitted(models$Africa))
 
-glm_additive2<- lm(smoothed_cases_per_million ~ smoothed_stringency_index +
-                     smoothed_vaccines_per_hundred +
-                     smoothed_voc_prop +
-                     smoothed_distinct_lineages *
-                     continent, 
-                   data = df_continent)
-summary(glm_additive2)
+fitAndPlotFunction<-function(selected_continent){
+  regressionData %>%
+    dplyr::filter(continent==selected_continent) %>%
+    mutate(fitted_cases = fitted(models[[selected_continent]]),
+           smoothed_fitted = zoo::rollmean(fitted_cases, k = 14, fill = NA)) %>%
+    #dplyr::arrange(date) %>%
+    #mutate(smoothed_fitted = zoo::rollmean(fitted_cases, k = 14, fill = 0))
+    ggplot()+
+    geom_line(aes(x=date, y=smoothed_cases_per_million, color="Data"))+
+    geom_line(aes(x=date, y=smoothed_fitted, color="Fitted"))+
+    theme_bw()+
+    scale_x_date(date_labels = "%b",date_breaks = "6 months", limits = as.Date(c('2020-01-01','2021-10-01')))+
+    theme(panel.background = element_rect(fill = "transparent"), # bg of the panel
+          plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+          axis.text.x = element_text(color="black", size=9.5),
+          axis.title.x = element_blank(),
+          axis.title.y = element_blank(),
+          axis.text.y = element_text(color="black", size=10),
+          legend.position = "top",
+          legend.justification = "left",
+          legend.margin = margin(0,0,0,0),
+          legend.box.margin = margin(-10,-10,-10,-10),
+          legend.background = element_rect(fill = "transparent"), # get rid of legend bg
+          panel.grid.major = element_blank(),
+          panel.grid.minor = element_blank())+ 
+    guides(color=guide_legend(title=NULL))+
+    scale_color_manual(values=c("black", "violetred1"))
+  }
 
 
-##Predict ####
-#get predicted values#####################
-#use fitted, not predict
-head(df_continent)
-df_continent$allNoVaccine <- fitted(glm_additive1)
+Africa<-fitAndPlotFunction("Africa")
+Asia<-fitAndPlotFunction("Asia")
+Europe<-fitAndPlotFunction("Europe")
+North_America<-fitAndPlotFunction("North America")
+Oceania<-fitAndPlotFunction("Oceania")
+South_America<-fitAndPlotFunction("South America")
 
-df_continent$all <- fitted(glm_additive2)
 
-head(df_continent)
 
-#smooth the predictions above
-df_continent2 <- df_continent %>%
-  group_by(continent) %>%
-  dplyr::arrange(date) %>% 
-  dplyr::mutate(all_smoothed = zoo::rollmean(all, k = 14, fill = NA)) %>%   #biweekly rolling mean - for smoothing
-  dplyr::mutate(allNoVaccine_smoothed = zoo::rollmean(allNoVaccine, k = 14, fill = NA)) 
+
+
 
 
 #Plot 1#################################
-#select per continent to plot
-
-#selected<-"South America"
-comprehensive_df3<-df_continent2 %>%
-  filter(continent==selected)
-
-#pdf(paste0("../figures/Fitted", selected, ".pdf"), width=8, height = 4.5)
-plot1<-ggplot(data=df_continent2)+
-  geom_line(aes(x=date, y=smoothed_cases_per_million, color="Data"))+
-  geom_line(aes(x=date, y=allNoVaccine_smoothed, color="Fitted 1"))+
-  geom_line(aes(x=date, y=all_smoothed, color="Fitted 2"))+
-  theme_bw()+
-  theme(legend.position = "right") +
-  scale_x_date(date_labels = "%b\n%Y",date_breaks = "3 months", limits = as.Date(c('2019-12-01','2021-08-01')))+
-  #theme(axis.title.x = element_text(color="black", size=15, face="bold"))+
-  theme(axis.text.x = element_text(color="black", size=9.5),
-        axis.title.x = element_blank(),
-        axis.title.y = element_text(color="black", size=11),
-        axis.text.y = element_text(color="black", size=10),
-        legend.position = "top",
-        #panel.grid.major = element_blank(),
-        panel.grid.minor = element_blank())+ 
-  ylab("Cases per million")+
-  scale_fill_brewer(palette = "Set3")+
-  #ggtitle(selected)+
-  guides(color=guide_legend(title=NULL))+
-  facet_wrap(vars(continent))
-#dev.off()
-
-plot1
-
-
-
-
-
-
-
-
-
 
 ##########################################################
 
