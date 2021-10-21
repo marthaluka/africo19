@@ -1,6 +1,5 @@
 
 #To create a fancy map to visualize global lineage dynamics
-    #Inspired by Jamie Hudson's TidyTuesday Aus BirdBaths
 
 rm(list = ls())
 
@@ -87,6 +86,9 @@ summ_lineages<- selectData %>%
   dplyr::summarise(n=n()) %>%
   arrange(desc(n)) %>%
   slice(1:5) 
+                        
+                          #######add vocs if not in top 5 per country
+
 
 topLineages<-unique(summ_lineages$lineage)
 
@@ -162,7 +164,7 @@ plotFunction<-function(big_data, selection, na.rm=T) {
     theme_classic() + theme_bw() +
     ylab('Proportion') +
     scale_y_continuous(breaks = c(0,0.25, 0.50, 0.75, 1))+
-    theme(legend.position = "top") +
+    theme(legend.position = "right") +
     scale_x_date(date_labels = "%b \n \n %Y",date_breaks = "6 months", limits = as.Date(c('2019-12-01','2021-10-01')))+
     theme(axis.title = element_blank(),
           axis.text = element_text(color="black", size=2.5),
@@ -183,24 +185,6 @@ uganda <- plotFunction(df_biweeklyTotal, "Uganda")
 gambia <- plotFunction(df_biweeklyTotal, "The Gambia")
 
 
-## circles ############
-kenya_circle <- ggplot() +
-  geom_circle(aes(x0 = 0, y0 = 0, r = 2),  #geom_ellipse
-              colour = "lightpink2", size = 0.8, fill = "grey99") +
-  coord_fixed() +
-  theme_void()
-
-uganda_circle <- ggplot() +
-  geom_circle(aes(x0 = 0, y0 = 0, r = 2),
-              colour = "lightblue", size = 0.8, fill = "grey99") +
-  coord_fixed() +
-  theme_void()
-
-gambia_circle <- ggplot() +
-  geom_circle(aes(x0 = 0, y0 = 0, r = 2),
-              colour = "#918DBA", size = 0.8, fill = "grey99") +
-  coord_fixed() +
-  theme_void()
 
 
 # bring map together
@@ -210,8 +194,6 @@ maps_2 <- ggdraw(xlim = c(0, 35), ylim = c(0, 30)) +
                fill = "lightpink2", alpha = 0.6) +
   geom_polygon(aes(x = c(18.5,20,20.5), y = c(15, 17, 12)),
                fill = "lightblue", alpha = 0.6) +
-  #draw_plot(kenya_circle, x = 17.7, y = 15.5, width = 3, height = 3) +
-  #draw_plot(uganda_circle, x = 15, y = 15.3, width = 3, height = 3) +
   draw_plot(kenya, x = 20, y = 11.8, width = 5.5, height = 5.5) +
   draw_plot(uganda, x = 12.5, y = 16.2, width = 5.5, height = 5) 
 
