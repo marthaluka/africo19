@@ -216,28 +216,42 @@ plot2<-ggplot() +
   theme(legend.position = "right") +
   scale_x_date(date_labels = "%b \n %Y",date_breaks = "3 months", limits = as.Date(c('2019-12-01','2021-10-01')))+
   #theme(axis.title.x = element_text(color="black", size=15, face="bold"))+
-  theme(axis.text.x = element_text(angle=0, color="black", size=7),
+  theme(axis.text.x = element_text(angle=0, color="black", size=13),
         axis.title.x = element_blank(),
-        axis.title.y = element_text(color="black", size=10, face="bold"),
-        axis.text.y = element_text(color="black", size=7),
+        axis.title.y = element_text(color="black", size=15, face="bold"),
+        axis.text.y = element_text(color="black", size=14),
         plot.title = element_text(size = 10, face = "bold"),
+        legend.text=element_text(size=13),
+        legend.title=element_text(size=15),
         panel.grid.major = element_blank(),
         panel.grid.minor = element_blank(),
         strip.background = element_blank(),
-        strip.text = element_text(size = 10))+ 
+        strip.text = element_text(size = 15))+ 
   scale_fill_manual(values = my_colour_palette, name ="Lineage")+
-  facet_wrap(vars(continent), ncol = 2)+
+  facet_wrap(vars(continent), ncol = 3)+
   guides(fill=guide_legend(title="Lineage"))
 
 plot2
 #dev.off()
 
+
+#run regression_continent.R script at this stage to end up with ggplot objects in the environment
+
 #Arrange plots in set##########
 
-#pdf(paste0("../figures/", selection, "3.pdf"), width=8, height = 4.5)
-plot2 + inset_element(plot1, left = 0.01,right = 0.5, bottom = 0.6, top = 0.99)
-#dev.off()
+africa <- plot2 + inset_element(Africa, left = 0.018,right = 0.25, bottom = 0.88, top = 0.993)
+africa_asia <- africa + inset_element(Asia, left = 0.5,right = 0.75, bottom = 0.88, top = 0.993)
+africa_asia_europe <- africa_asia + inset_element(Europe, left =  -0.01,right = 0.24, bottom = 0.54, top = 0.642)
+africa_asia_europe_namerica <- africa_asia_europe + inset_element(North_America, left = 0.5,right = 0.75, bottom = 0.54, top = 0.642)
+africa_asia_europe_namerica_oceania<-africa_asia_europe_namerica + inset_element(Oceania, left = -0.01,right = 0.175, bottom = 0.183, top = 0.297)
+all <-africa_asia_europe_namerica_oceania + inset_element(South_America, left = 0.5,right = 0.75, bottom = 0.18, top = 0.297)
+all
 
-#clear memory
-rm(list = ls())
+
+pdf(paste0("./figures/Figure_1.pdf"), width=14, height = 10)
+all
 dev.off()
+
+# #clear memory
+# rm(list = ls())
+# dev.off()
