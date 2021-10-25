@@ -191,6 +191,7 @@ plotFunction<-function(big_data, selection, na.rm=T) {
           legend.text = element_text(size = 2.5),
           legend.title = element_text(size = 2.5))+ 
     scale_fill_brewer(palette ="Set3")+
+    ggtitle(selection)+
     #scale_fill_manual(values = my_colour_palette,name ="Lineage")+
     guides(fill=guide_legend(title="Lineage"))
 }
