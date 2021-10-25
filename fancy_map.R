@@ -68,7 +68,12 @@ table(mutationData$lineage)
 table(mutationData$country)
 
 #our geographical selction
-africo19<- c("Kenya", "Uganda", "The Gambia")
+#africo19<- c("Kenya", "Uganda", "The Gambia")
+africo19 <-c("South Africa", "India", "Japan", "South Korea", "Belgium", "France",        
+             "Germany", "Italy",  "Netherlands", "Norway", "Spain",  "Sweden",        
+             "Switzerland", "United Kingdom", "Canada","Mexico", "United States", "Australia",     
+              "Brazil")
+
 
 selectData<- mutationData %>%
   dplyr::filter(
@@ -87,7 +92,7 @@ summ_lineages<- selectData %>%
   arrange(desc(n)) %>%
   slice(1:5) 
                         
-                          #######add vocs if not in top 5 per country
+                          #######add vocs if not in top 5 per country?
 
 
 topLineages<-unique(summ_lineages$lineage)
@@ -97,6 +102,17 @@ my_colour_palette<-c("#8DD3C7","#FFFFB3","#BEBADA","#FB8072","#80B1D3",
                      "#B3DE69","#FCCDE5","deeppink3","#BC80BD","#CCEBC5","darkorange", 
                      "goldenrod1","royalblue",
                      "cyan", "gray30", "firebrick1","gray95", "peachpuff",  "magenta")
+
+number_of_colors_needed <- length(africo19)
+  #extract qualitative colour palettes from RColorBrewer
+qualitative_color_palettes<- brewer.pal.info[brewer.pal.info$category == "qual",]
+  #create mash-up of colours
+colour_palette <- unlist(mapply(brewer.pal, qualitative_color_palettes$maxcolors, 
+                                   rownames(qualitative_color_palettes)))
+  #subset to what we need
+my_colour_palette<- colour_palette[c(1:number_of_colors_needed)] 
+  #or randomly (will change everytime)
+my_colour_palette<-sample(colour_palette,18)
 
 
 df_topLineages<- selectData %>%
@@ -123,9 +139,11 @@ globe_shp <- st_read(dsn="./mapShapefiles/", layer="TM_WORLD_BORDERS_SIMPL-0.3")
 globe <- st_transform(globe_shp, "+init=epsg:4326") 
 globe <- ms_simplify(globe) # Simplify as otherwise is massive and laptop gets sad
 
+globe$NAME
 
 selectRegions <- globe %>% 
   dplyr::filter(NAME %in% africo19)
+
 
 no_borders<- globe %>% 
   dplyr::filter(! NAME %in% africo19)
@@ -137,14 +155,14 @@ ken <- ne_countries(scale = "medium", returnclass = "sf", country = "Kenya")
     geom_sf(data = globe, fill = NA) +
     geom_sf(data = no_borders, color = "#FAFAFA", alpha= 1) +
    #geom_sf(data=ibra_regs, fill = "#E1E3D4") +
-   geom_sf(data=selectRegions, fill = c("lightblue", "lightpink2"))+
+   geom_sf(data=selectRegions, fill = my_colour_palette)+
    xlab("Longitude") +
    ylab("Latitude") + 
-    xlim(-18, 65)+
-    ylim(-34, 40) +
+    #xlim(-135, 135)+
+    ylim(-55, 80) +
    theme_bw() +
-   theme(plot.background = element_rect(fill = "#FAFAFA"),
-         panel.background = element_rect(fill = "#FAFAFA", colour = "#FAFAFA"),
+   theme(plot.background = element_blank(),
+         panel.background = element_rect(fill = "lightblue1", colour = "powderblue"),
          axis.title = element_blank(),
          axis.text = element_blank(),
          panel.grid = element_blank(),
@@ -172,13 +190,13 @@ plotFunction<-function(big_data, selection, na.rm=T) {
           panel.grid.minor = element_blank(),
           legend.text = element_text(size = 2.5),
           legend.title = element_text(size = 2.5))+ 
-    #scale_color_brewer(palette ="Set3")+
-    scale_fill_manual(values = my_colour_palette,name ="Lineage")+
+    scale_fill_brewer(palette ="Set3")+
+    #scale_fill_manual(values = my_colour_palette,name ="Lineage")+
     guides(fill=guide_legend(title="Lineage"))
 }
 
 
-kenya <- plotFunction(df_biweeklyTotal, "Kenya")
+australia <- plotFunction(df_biweeklyTotal, "Australia")
   
 uganda <- plotFunction(df_biweeklyTotal, "Uganda")
 
