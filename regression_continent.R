@@ -297,6 +297,8 @@ regressionData %>%
   ) %>% 
   unnest(tidied)  #repeat for other variables?. Actually just do this globally once and visualize
 
+
+
 # corr data
 corr_data<-regressionData %>% 
   ungroup () %>% 

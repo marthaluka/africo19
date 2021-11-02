@@ -344,16 +344,17 @@ fitAndPlotFunction<-function(selected_country){
     geom_line(aes(x=date, y=smoothed_cases_per_million, color="Data"))+
     geom_line(aes(x=date, y=smoothed_fitted, color="Fitted"))+
     theme_bw()+
-    scale_x_date(date_labels = "%b",date_breaks = "6 months", limits = as.Date(c('2020-01-01','2021-10-01')))+
+    ylab('Cases') +
+    scale_x_date(date_labels = "%b \n %Y",date_breaks = "6 months", limits = as.Date(c('2020-01-01','2021-10-01')))+
     theme(#panel.background = element_rect(fill = "transparent"), # bg of the panel
           #plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
-          axis.text.x = element_text(color="black", size=6),
+          axis.text.x = element_text(color="black", size=4),
           axis.title.x = element_blank(),
-          axis.title.y = element_blank(),
-          axis.text.y = element_text(color="black", size=6),
-          plot.title = element_text(size=6),
+          axis.title.y = element_text(color="black", size=4),
+          axis.text.y = element_text(color="black", size=4),
+          plot.title = element_text(size=5),
           legend.position = "top",
-          legend.text = element_text(color="black", size=5),
+          legend.text = element_text(color="black", size = 5),
           legend.justification = "left",
           legend.margin = margin(0,0,0,0),
           legend.box.margin = margin(-10,-10,-10,-10),
