@@ -8,7 +8,7 @@ rm(list = ls())
 ## packages
 require("pacman")
 pacman::p_load(data.table, tidyverse, zoo, RColorBrewer, directlabels,corrplot, broom,
-               stringr, spData, ggrepel, corrr, patchwork, cowplot, egg, here, visreg,
+               stringr, spData, ggrepel, ggcorrplot, patchwork, cowplot, egg, here, visreg,
                glmmTMB, lme4, DHARMa, performance, MASS, mgcv) 
 
 
@@ -144,8 +144,8 @@ mutationData<- mutationData %>%
 
 #clean up country names and the ever increasing in complexity lineage naming system
 mutationData$country[startsWith(mutationData$country, "Uk-")] <- "United Kingdom"
-mutationData$lineage[startsWith(mutationData$lineage, "AY.")] <- "Delta"
-mutationData$lineage[startsWith(mutationData$lineage, "Q.")] <- "Alpha"
+mutationData$lineage[startsWith(mutationData$lineage, "AY")] <- "Delta"
+mutationData$lineage[startsWith(mutationData$lineage, "Q")] <- "Alpha"
 
 dict<-c("B.1.1.7" ="Alpha",
         "B.1.351" = "Beta",
@@ -279,15 +279,15 @@ regressionData<- df_continent %>%
   
 
 ggplot(data= regressionData)+
-  geom_line(aes(x=date, y=smoothed_voc_prop))+
-  geom_line(aes(x=date, y=smoothed_diversity))+
+  geom_line(aes(x=date, y=smoothed_voc_prop, color="voc"))+
+  geom_line(aes(x=date, y=smoothed_diversity, color="diversity"))+
   facet_wrap(vars(continent))+
   theme_bw()
 
 
-#all looks good! Time to fit a linear model :-)
+#all looks good! Time to fit a linear model 
 
-#correlation test first 
+# Wait, correlation test first 
 
 regressionData %>% 
   nest(data = -continent) %>% 
@@ -295,11 +295,38 @@ regressionData %>%
     voc = map(data, ~ cor.test(.x$smoothed_cases_per_million, .x$smoothed_voc_prop)), # S3 list-col
     tidied = map(voc, tidy)
   ) %>% 
-  unnest(tidied)  #repeat for other variables. Actually just do this globally once and visualize
+  unnest(tidied)  #repeat for other variables?. Actually just do this globally once and visualize
+
+# corr data
+corr_data<-regressionData %>% 
+  ungroup () %>% 
+  dplyr::select(smoothed_cases_per_million, smoothed_voc_prop, smoothed_diversity, 
+                smoothed_stringency_index, smoothed_vaccines_per_hundred) %>% 
+  dplyr::rename(VOCs = smoothed_voc_prop,
+                `Infection rate` = smoothed_cases_per_million,
+                Vaccination =smoothed_vaccines_per_hundred,
+                `Virus diversity` =smoothed_diversity,
+                `Stringency index` =smoothed_stringency_index)
+
+# corr values
+corr <- round(cor(corr_data),2)
+# p values  
+p.mat <- cor_pmat(corr_data)
+# plot
+
+corr_plot<-ggcorrplot(corr, hc.order = F, type = "lower",lab = T,
+           outline.col = "white",
+           #insig = "blank", 
+           colors = c("royalblue4", "white", "#E46726"))+
+  theme(panel.grid = element_blank())
+
+pdf(paste0("./figures/correlation.pdf"), width=8, height = 8)
+corr_plot
+dev.off()
 
 
 
-# Time to fit a linear model :-)
+# Time to fit a linear model, for real this time :-)
 
 # Multiple Linear Regression
     #lm([target variable] ~ [predictor variables], data = [data source])
@@ -323,12 +350,9 @@ l_ply(models, summary, .print = TRUE)
 # R Squared
 laply(models, function(mod) summary(mod)$r.squared)
 
-# Find fitted values
 summary(models$Africa)
 
-african_df<-regressionData %>%
-  dplyr::filter(continent=="Africa") %>%
-  mutate(fitted_cases = fitted(models$Africa))
+# Find fitted values
 
 fitAndPlotFunction<-function(selected_continent){
   regressionData %>%

@@ -3,7 +3,7 @@
 
 #Read data
 
-rm(list = ls())
+#rm(list = ls())
 
 ## packages
 require("pacman")
@@ -86,8 +86,16 @@ renameFunction<-function(locationName, na.rm=T){
     gsub("And ", "and ", .)  %>%      #clean up the tough names 
     gsub("Of ", "of ", .)  %>%
     gsub(" The", " the", .) %>%
-    gsub("Usa", "United States", .)%>%
-    gsub("Gambia", "The Gambia", .)
+    gsub("Usa", "United States", .)#%>%
+    #gsub("Gambia", "The Gambia", .) #dont need this
+  
+  # "OWID, GISAID"
+  # "Czechia", "Czech Republic" Czech Republic
+  # "Guyana", "French Guiana" French Guiana
+  # "Democratic Republic of Congo", "Democratic Republic of the Congo"
+  # "Gambia", "The Gambia" Gambia
+  # "Sint Maarten (Dutch part)","Sint Maarten" Saint Martin
+  
 }
 
 
@@ -99,10 +107,10 @@ mutationData<- mutationData %>%
   drop_na()
 
 
-# #drop countries with less than 300 sequences (makes it easier for more stringent filtering downstream)
+# #drop countries with less than 500 sequences (makes it easier for more stringent filtering downstream)
 table1<-table(mutationData$country)
 mutationData<- mutationData %>% 
-subset(.,country %in% names(table1[table1>300])) #drop
+subset(.,country %in% names(table1[table1>500])) #drop
 
 #clean up country names and the ever increasing in complexity lineage naming system
 mutationData$country[startsWith(mutationData$country, "Uk-")] <- "United Kingdom"
@@ -121,6 +129,13 @@ mutationData<-mutationData %>%
   dplyr::select(-c(lineage2))
 
 table(mutationData$country)
+table(owidData0$location)
+# "OWID, GISAID"
+# "Czechia", "Czech Republic"
+# "Guyana", "French Guiana"
+# "Democratic Republic of Congo", "Democratic Republic of the Congo"
+# "Gambia", "The Gambia"
+# "Sint Maarten (Dutch part)","Sint Maarten"
 
 head(mutationData)
 
@@ -219,19 +234,20 @@ head(countryData)
 head(comprehensive_mutation_df)
 
 df_country<-countryData %>% 
-  rename(., country = location) %>% 
+  dplyr::rename(., country = location) %>% 
   left_join(comprehensive_mutation_df, by=c("country", "date"))
 
 #filter out countries before regression
   #criteria is data completeness
 
-df_data_completeness<-df_country%>%
+df_data_completeness <- df_country%>%
   dplyr::filter(
-    ! country == "Palau")%>%
-  group_by(continent,country)%>%
-  summarise(missingSequenceData = sum(is.na(tot_sequences)))#use this
+    ! country == "Palau"
+    ) %>%
+  dplyr::group_by(continent,country) %>%
+  dplyr::summarise(missingSequenceData = sum(is.na(tot_sequences)))#use this
 
-df_data_completeness%>%
+df_data_completeness %>%
   dplyr::filter(
     missingSequenceData<100,
     )%>%
@@ -241,12 +257,12 @@ df_data_completeness%>%
   theme_bw()
 
 
-table2<-df_data_completeness%>%
+table2<- df_data_completeness%>%
   dplyr::filter(
-    missingSequenceData<50
+    missingSequenceData<150
   )
 
-df_country_filtered<- df_country %>% 
+df_country_filtered <- df_country %>% 
   subset(.,country %in% table2$country) #drop
 
 
@@ -310,15 +326,17 @@ l_ply(models, summary, .print = TRUE)
 # R Squared
 laply(models, function(mod) summary(mod)$r.squared)
 
+pacman::p_unload(plyr)
 # Find fitted values
-summary(models$Australia)
+summary(models$France)
 
 
 
 fitAndPlotFunction<-function(selected_country){
   regressionData %>%
     dplyr::filter(country==selected_country) %>%
-    mutate(fitted_cases = fitted(models[[selected_country]]),
+    #get fitted infections per capita and smooth using rolling mean
+    dplyr::mutate(fitted_cases = fitted(models[[selected_country]]),
            smoothed_fitted = zoo::rollmean(fitted_cases, k = 14, fill = NA)) %>%
     #dplyr::arrange(date) %>%
     #mutate(smoothed_fitted = zoo::rollmean(fitted_cases, k = 14, fill = 0))
@@ -327,44 +345,29 @@ fitAndPlotFunction<-function(selected_country){
     geom_line(aes(x=date, y=smoothed_fitted, color="Fitted"))+
     theme_bw()+
     scale_x_date(date_labels = "%b",date_breaks = "6 months", limits = as.Date(c('2020-01-01','2021-10-01')))+
-    theme(panel.background = element_rect(fill = "transparent"), # bg of the panel
-          plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
-          plot.title = element_text(color="black", size=10),
-          axis.text.x = element_text(color="black", size=9.5),
+    theme(#panel.background = element_rect(fill = "transparent"), # bg of the panel
+          #plot.background = element_rect(fill = "transparent", color = NA), # bg of the plot
+          axis.text.x = element_text(color="black", size=6),
           axis.title.x = element_blank(),
           axis.title.y = element_blank(),
-          axis.text.y = element_text(color="black", size=10),
-          legend.position = c(0.05,0.93),
+          axis.text.y = element_text(color="black", size=6),
+          plot.title = element_text(size=6),
+          legend.position = "top",
+          legend.text = element_text(color="black", size=5),
           legend.justification = "left",
           legend.margin = margin(0,0,0,0),
           legend.box.margin = margin(-10,-10,-10,-10),
+          legend.key.width =  unit(2, "mm"),
           legend.background = element_rect(fill = "transparent"), # get rid of legend bg
           panel.grid.major = element_blank(),
           panel.grid.minor = element_blank())+ 
     guides(color=guide_legend(title=NULL))+
+    ggtitle(selected_country)+
     scale_color_manual(values=c("black", "violetred1"))
 }
 
 
-Australia<-fitAndPlotFunction("Australia")
-Belgium<-fitAndPlotFunction("Belgium")
-Brazil<-fitAndPlotFunction("Brazil")
-Canada<-fitAndPlotFunction("Canada")
-France<-fitAndPlotFunction("France")
-Germany<-fitAndPlotFunction("Germany")
-India<-fitAndPlotFunction("India")
-Italy<-fitAndPlotFunction("Italy")
-Japan<-fitAndPlotFunction("Japan")
-Mexico<-fitAndPlotFunction("Mexico")
-Netherlands<-fitAndPlotFunction("Netherlands")
-Norway<-fitAndPlotFunction("Norway")
-South_Africa<-fitAndPlotFunction("South Africa")
-South_Korea<-fitAndPlotFunction("South Korea")
-Spain<-fitAndPlotFunction("Spain")
-Sweden<-fitAndPlotFunction("Sweden")
-Switzerland<-fitAndPlotFunction("Switzerland")
-United_Kingdom<-fitAndPlotFunction("United Kingdom")
-United_States<-fitAndPlotFunction("United States")
+
 
 
 
