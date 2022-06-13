@@ -63,47 +63,47 @@ pacman::p_unload(plyr) #will conflict with dplyr downstream
 
 
 
-##2. VOC proportions per time period########
-
-#define VOCs 
-vocs<-c("Alpha", "Beta", "Gamma", "Delta")
-
-### Summary of lineages per country per day
-dplyr::count(mutationData, country, date7, lineage) -> country_weekly_lineage_summary
-
-              # # #count vocs per country per day
-              # vocs_count <- country_weekly_lineage_summary %>% 
-              #   dplyr::filter(lineage %in% vocs) %>% 
-              #   group_by(country, date7) %>% 
-              #   summarise(
-              #     voc_total = sum(n, na.rm = T)
-              #   )
-
-
-# #total sequences per country per day
-data_set_country <- country_weekly_lineage_summary %>% 
-  # left_join(vocs_count,
-  #           by = c("country", "date")) %>% 
-  group_by(country, date) %>% 
-  summarise(
-    tot_sequences = sum(n)
-  )
-
-# #proportion of vocs per country per day
-voc_proportions_country <- data_set_country %>% 
-  left_join(vocs_count,
-            by = c("country", "date")) %>% 
-  mutate(
-    voc_total = replace(voc_total, which(is.na(voc_total)), NA),   
-    voc_prop = (voc_total/tot_sequences)
-  ) %>%
-  #dplyr::select(-c(tot_sequences, voc_total)) %>%  
-  dplyr::group_by(country) %>% 
-  dplyr::arrange(date) %>%
-  mutate(
-    imputed_voc_prop = na_ma(voc_prop, k = 14, weighting="simple", maxgap=50), #impute missing values with rolling average
-    smoothed_voc_prop = zoo::rollmean(imputed_voc_prop, k = 14, na.pad = T, align = "right")  #biweekly rolling mean - for smoothing
-  ) 
+# ##2. VOC proportions per time period########
+# 
+# #define VOCs 
+# vocs<-c("Alpha", "Beta", "Gamma", "Delta")
+# 
+# ### Summary of lineages per country per day
+# dplyr::count(mutationData, country, date7, lineage) -> country_weekly_lineage_summary
+# 
+#               # # #count vocs per country per day
+#               # vocs_count <- country_weekly_lineage_summary %>% 
+#               #   dplyr::filter(lineage %in% vocs) %>% 
+#               #   group_by(country, date7) %>% 
+#               #   summarise(
+#               #     voc_total = sum(n, na.rm = T)
+#               #   )
+# 
+# 
+# # #total sequences per country per day
+# data_set_country <- country_weekly_lineage_summary %>% 
+#   # left_join(vocs_count,
+#   #           by = c("country", "date7")) %>% 
+#   group_by(country, date7) %>% 
+#   summarise(
+#     tot_sequences = sum(n)
+#   )
+# 
+# # #proportion of vocs per country per day
+# voc_proportions_country <- data_set_country %>% 
+#   left_join(vocs_count,
+#             by = c("country", "date7")) %>% 
+#   mutate(
+#     voc_total = replace(voc_total, which(is.na(voc_total)), NA),   
+#     voc_prop = (voc_total/tot_sequences)
+#   ) %>%
+#   #dplyr::select(-c(tot_sequences, voc_total)) %>%  
+#   dplyr::group_by(country) %>% 
+#   dplyr::arrange(date) %>%
+#   mutate(
+#     imputed_voc_prop = na_ma(voc_prop, k = 14, weighting="simple", maxgap=50), #impute missing values with rolling average
+#     smoothed_voc_prop = zoo::rollmean(imputed_voc_prop, k = 14, na.pad = T, align = "right")  #biweekly rolling mean - for smoothing
+#   ) 
 
 
 
@@ -117,7 +117,7 @@ clean_mutations<-vroom::vroom("../data/mutations_clean_file2.csv") %>%
   select(Gisaid, Date, Country, NewMutation)
 
 # tibble to data.table for ? faster wrangling
-clean_mutations<-data.table(clean_mutations)
+clean_mutations<-setDT(clean_mutations)
 
 # Date
 clean_mutations$Date <- as.Date(clean_mutations$Date)
@@ -194,6 +194,9 @@ fitness_df <- fitness_df %>%
   mutate(across(where(is.character),str_trim)) %>%
   drop_na()
 
+#clean up UK naming
+fitness_df$country[startsWith(fitness_df$country, "Uk-")] <- "United Kingdom"
+
 ####Comprehensive mutation data  ####
 head(fitness_df)
 head(lineage_diversity_df)
@@ -213,7 +216,7 @@ df_country<-countryData %>%
   dplyr::rename(., country = location) %>% 
   left_join(comprehensive_mutation_df, by=c("country", "date7"))
 
-rm(list=setdiff(ls(), c("mutationData", "owidData0", "df_country", "fitness_df", "countryData")))
+rm(list=setdiff(ls(), c("mutationData", "owidData0", "df_country", "fitness_df", "fit_mutations_count", "countryData")))
 
 #filter out countries before regression
   #criteria is data completeness
@@ -241,9 +244,8 @@ df_country_filtered <- df_country %>%
 
 
 
-df_country_filtered<-mutate_at(df_country_filtered, c("smoothed_cases_per_million", "smoothed_vaccines_per_hundred",
-                                        "stringency_index", "smoothed_diveristy", "smoothed_voc_prop",
-                                        "smoothed_distinct_lineages"),
+df_country_filtered<-mutate_at(df_country_filtered, c("cases", "vaccine_doses",
+                                        "govt_index", "diversity_score", "fitness_score3"),
                         ~replace(., is.na(.), 0))
 
 
@@ -313,8 +315,16 @@ lm_with_plyr<-function(df){
 }
 #divide df into smaller dfs (creates a list of dfs) based on country and run lm for each of the dfs
 models<-dlply(regressionData, "country", lm_with_plyr)
+
 # Apply coef to each model and return a data frame
-ldply(models, coef)
+coefficients_df <- ldply(models, coef)
+coefficients_df$R_squared <- laply(models, function(mod) summary(mod)$r.squared)
+
+format(coefficients_df, digits = 2) %>%
+  flextable::flextable() %>%
+  flextable::autofit() %>%
+  flextable::save_as_html(path = "figures/regression_coefficients.html")
+
 # Print the summary of each model
 l_ply(models, summary, .print = TRUE)
 # R Squared
@@ -391,7 +401,7 @@ select_mutationData<- mutationData %>%
 
 top_ten_lineages <- dplyr::count(select_mutationData, lineage) %>% 
   arrange(desc(n)) %>%
-  slice(1:10) 
+  dplyr::slice(1:10) 
 
 genomes_per_fortnight_per_country <- dplyr::count(select_mutationData,country, date14) %>% 
   dplyr::rename(total_seqs = n)
@@ -409,8 +419,11 @@ my_colour_palette<-c("#8DD3C7","#FFFFB3","royalblue","#FB8072","#80B1D3",
                      "peachpuff","gray40", "cyan", "deepskyblue3", "tan4","gray95", "firebrick1")
 
 #order legend
-lineage_levels<-c("Alpha", "Beta", "Gamma", "Delta", "Omicron", "B.1", "B.1.1.214", "B.1.1.284",
-                  "B.1.177", "B.1.2", "B.1.621", "C.37", "D.2")
+lineage_levels<-c("Alpha", "Beta", "Gamma", "Delta", "Omicron", "B.1", "B.1.1","B.1.177", "B.1.2",
+                  "B.1.429", "B.1.526")
+
+lineage_specific_count_per_fortnight_per_country$lineage <- factor(lineage_specific_count_per_fortnight_per_country$lineage, 
+                                                                   levels = lineage_levels)
 
 countryData_filtered<- countryData %>%
   dplyr::rename(country=location) %>%
