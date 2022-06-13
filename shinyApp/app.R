@@ -87,7 +87,7 @@ world_spdf <- readOGR(
 source("./data_wrangling.R")
 
 #select a certain date
-selectedData <- owid_Data1[owid_Data1$date == "2020-07-15", ]
+selectedData <- owid_Data1[owid_Data1$date == "2022-01-15", ]
 
 #match cases and spatial data via ISO3/iso_code
 world_spdf$Total_Cases <- selectedData$total_cases_per_million[match(world_spdf$ISO3, selectedData$iso_code)]
@@ -98,12 +98,11 @@ world_spdf@data$LabelText <- paste0(
     "<b>Cases:</b> ", format(world_spdf@data$Total_Cases, nsmall=0, big.mark=","))
 
 #define colorpalette for chart legend
-#paletteBins <- c(0, 50000, 100000, 250000, 500000, 1000000, 2500000, 5000000, 10000000)
+paletteBins <- c(0, 100000, 250000, 500000, 800000)
 colorPalette <- colorBin(palette = "YlOrBr", 
                          domain = owid_Data1$total_cases_per_million,
-                         na.color = "transparent") 
-#na.color = "transparent",
-#bins = paletteBins)
+                         na.color = "transparent",
+                         bins = paletteBins)
 
 #shiny UI
 ui <- fluidPage(

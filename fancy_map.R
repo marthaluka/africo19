@@ -17,55 +17,7 @@ showtext_auto(enable = TRUE)
 
 ## load data ##################################
 
-mutationData<-read.csv("../data/metadata_20210907.csv", header = F) %>%
-  dplyr::select(V2, V10, V5, V8, V11) 
-
-column_headings <- c("gisaid_ID", "country", "lineage", "date", "continent")
-names(mutationData)<-column_headings
-
-mutationData$date<-as.Date(mutationData$date)
-mutationData$date14<-as.Date(cut(mutationData$date,breaks = "2 weeks",start.on.monday = FALSE))
-
-#clean and process data ###########
-#rename countries and continents in gisaid data to match owid data
-renameFunction<-function(locationName, na.rm=T){
-  gsub("_", " ", locationName) %>%    #replace underscore with space
-    str_to_title(locationName) %>%    #change country to sentence case
-    gsub("And ", "and ", .)  %>%      #clean up the tough names 
-    gsub("Of ", "of ", .)  %>%
-    gsub(" The", " the", .) %>%
-    gsub("Usa", "United States", .)%>%
-    gsub("Gambia", "The Gambia", .)
-}
-
-#
-mutationData<- mutationData %>% 
-  dplyr::mutate_at(
-    c("continent", "country"), renameFunction
-  ) %>%
-  mutate(across(where(is.character),str_trim)) %>%
-  dplyr::filter(continent != is.na(.))
-
-
-#clean up country names and the ever increasing in complexity lineage naming system
-mutationData$country[startsWith(mutationData$country, "Uk-")] <- "United Kingdom"
-mutationData$lineage[startsWith(mutationData$lineage, "AY.")] <- "Delta"
-mutationData$lineage[startsWith(mutationData$lineage, "Q.")] <- "Alpha"
-
-dict<-c("B.1.1.7" ="Alpha",
-        "B.1.351" = "Beta",
-        "P.1" = "Gamma",
-        "B.1.617.2" = "Delta")
-
-mutationData$lineage2 <- as.character(dict[mutationData$lineage])
-
-mutationData<-mutationData %>%
-  mutate(lineage = coalesce(lineage2,lineage)) %>%
-  dplyr::select(-c(lineage2))
-
-table(mutationData$lineage)
-
-table(mutationData$country)
+head(mutationData) #from readData.R
 
 #our geographical selction
 #africo19<- c("Kenya", "Uganda", "The Gambia")
@@ -304,7 +256,7 @@ map1 <- ggdraw(xlim = c(2, 58), ylim = c(15,45)) +
   draw_plot(United_States, x = 6, y = 31, width = 4.5, height = 2.5)       #United States
 
 
-pdf(paste0("./figures/map_lineage_turnover.pdf"), width=22, height = 13)
+pdf(paste0("./figures/Supplementary_Figure_2.pdf"), width=22, height = 13)
 map1
 dev.off()
 
@@ -367,10 +319,10 @@ maps_2 <- ggdraw(xlim = c(2, 58), ylim = c(15,45)) +
   geom_polygon(aes(x = c(14.5,11,14.5), y = c(31.5, 29.5, 29.5)),       
                fill = "#1B9E77", alpha = 0.6) +
   draw_plot(Mexico, x = 11, y = 27, width = 3.5, height = 2.5) +    #Mexico
-  geom_polygon(aes(x = c(30.6,31,32.5), y = c(35.5, 31.5, 31.5)),
-               fill = "#D95F02", alpha = 0.6) +
-  draw_plot(Belgium, x = 31, y = 29, width = 3.5, height = 2.5) +     #Belgium
-  geom_polygon(aes(x = c(30.8,25.5,25.5), y = c(35.6, 33.5, 35)),
+  # geom_polygon(aes(x = c(30.6,31,32.5), y = c(35.5, 31.5, 31.5)),
+  #              fill = "#D95F02", alpha = 0.6) +
+  # draw_plot(Belgium, x = 31, y = 29, width = 3.5, height = 2.5) +     #Belgium
+  geom_polygon(aes(x = c(30.8,25.5,25.5), y = c(35.6, 32.5, 35)),
                fill = "#7570B3", alpha = 0.6) +
   draw_plot(Netherlands, x = 22, y = 32.5, width = 3.5, height = 2.5) +         #Netherlands
   geom_polygon(aes(x=c(31.8,28,31.5), y = c(37, 37.5,37.5)),
@@ -388,6 +340,11 @@ maps_2 <- ggdraw(xlim = c(2, 58), ylim = c(15,45)) +
   geom_polygon(aes(x = c(31.2,35,35), y = c(35, 30, 31.5)),
              fill = "#666666", alpha = 0.6) +
   draw_plot(Switzerland, x = 35, y = 29, width = 3.5, height = 2.5)  +      #Switzerland
+  
+  geom_polygon(aes(x = c(30.6,31,32.5), y = c(35.5, 31.5, 31.5)),
+               fill = "#D95F02", alpha = 0.6) +
+  draw_plot(Belgium, x = 31, y = 29, width = 3.5, height = 2.5) +     #Belgium
+  
   geom_polygon(aes(x = c(29.9,25.5,25.5), y = c(36, 36, 38.5)),
                fill = "#A6CEE3", alpha = 0.6) +
   draw_plot(United_Kingdom, x = 22, y = 36, width = 3.5, height = 2.5) +         #United Kingdom
@@ -398,7 +355,7 @@ maps_2 <- ggdraw(xlim = c(2, 58), ylim = c(15,45)) +
 #yeay
 #if it works, dont touch it
     
-pdf(paste0("./figures/map_regression.pdf"), width=22, height = 13)
+pdf(paste0("./figures/Supplementary_Figure_3.pdf"), width=22, height = 13)
 maps_2
 dev.off()
 
