@@ -1,6 +1,6 @@
 # africo19
 
-africo19 study - understanding sars-cov-2 epidemiology and evolution
+Is SARS-CoV-2’s evolutionary capacity mostly driven by host antiviral molecules?
 
 The COVID-19 pandemic has been characterised by sequential variant-specific waves shaped by viral, individual human and population factors.
 SARS-CoV-2 variants are defined by their unique combinations of mutations and there has been a clear adaptation to more efficient human
